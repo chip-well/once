@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"strings"
-
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
@@ -99,10 +97,7 @@ func (m Install) View() string {
 
 	var contentView string
 	if m.state == installStateForm {
-		contentView = lipgloss.NewStyle().
-			Width(m.width).
-			Align(lipgloss.Center).
-			Render(m.form.View())
+		contentView = m.form.View()
 	} else {
 		contentView = m.activity.View()
 	}
@@ -113,15 +108,17 @@ func (m Install) View() string {
 		helpLine = lipgloss.NewStyle().Width(m.width).Align(lipgloss.Center).Render(helpView)
 	}
 
-	topContent := title + "\n\n" + contentView
-	topHeight := lipgloss.Height(topContent)
-	bottomHeight := lipgloss.Height(helpLine)
-	middleHeight := max(m.height-topHeight-bottomHeight, 0)
+	titleHeight := lipgloss.Height(title)
+	helpHeight := lipgloss.Height(helpLine)
+	middleHeight := m.height - titleHeight - helpHeight
 
-	var middle strings.Builder
-	for range middleHeight {
-		middle.WriteString("\n")
-	}
+	centeredContent := lipgloss.Place(
+		m.width,
+		middleHeight,
+		lipgloss.Center,
+		lipgloss.Center,
+		contentView,
+	)
 
-	return topContent + middle.String() + helpLine
+	return title + centeredContent + helpLine
 }
