@@ -93,7 +93,7 @@ func (m Settings) Update(msg tea.Msg) (Component, tea.Cmd) {
 		return m, tea.Batch(m.progress.Init(), m.runDeploy())
 
 	case settingsDeployFinishedMsg:
-		return m, func() tea.Msg { return navigateToAppMsg{appName: m.app.Settings.Name} }
+		return m, func() tea.Msg { return navigateToAppMsg{app: m.app} }
 
 	case progressBusyTickMsg:
 		if m.state == settingsStateDeploying {

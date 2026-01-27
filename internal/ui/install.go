@@ -80,7 +80,7 @@ func (m Install) Update(msg tea.Msg) (Component, tea.Cmd) {
 		return m, m.activity.Init()
 
 	case InstallActivityDoneMsg:
-		return m, func() tea.Msg { return navigateToAppMsg{appName: msg.AppName} }
+		return m, func() tea.Msg { return navigateToAppMsg{app: msg.App} }
 	}
 
 	var cmd tea.Cmd

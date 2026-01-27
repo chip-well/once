@@ -26,12 +26,12 @@ type installProgressMsg struct {
 }
 
 type installDoneMsg struct {
-	appName string
-	err     error
+	app *docker.Application
+	err error
 }
 
 type InstallActivityDoneMsg struct {
-	AppName string
+	App *docker.Application
 }
 
 type InstallActivity struct {
@@ -44,19 +44,17 @@ type InstallActivity struct {
 	progressBar   ProgressBar
 	progressBusy  ProgressBusy
 	err           error
-	appName       string
+	app           *docker.Application
 	focused       bool
 	progressChan  chan installProgressMsg
 	doneChan      chan installDoneMsg
 }
 
 func NewInstallActivity(ns *docker.Namespace, imageRef, hostname string) InstallActivity {
-	appName := docker.NameFromImageRef(imageRef)
 	return InstallActivity{
 		namespace:    ns,
 		imageRef:     imageRef,
 		hostname:     hostname,
-		appName:      appName,
 		stage:        stagePreparing,
 		focused:      false,
 		progressChan: make(chan installProgressMsg, 10),
@@ -81,7 +79,7 @@ func (m InstallActivity) Update(msg tea.Msg) (InstallActivity, tea.Cmd) {
 		if m.stage == stageFinished || m.stage == stageFailed {
 			if key.Matches(msg, key.NewBinding(key.WithKeys("enter"))) {
 				if m.stage == stageFinished {
-					return m, func() tea.Msg { return InstallActivityDoneMsg{AppName: m.appName} }
+					return m, func() tea.Msg { return InstallActivityDoneMsg{App: m.app} }
 				}
 				return m, func() tea.Msg { return navigateToDashboardMsg{} }
 			}
@@ -102,6 +100,7 @@ func (m InstallActivity) Update(msg tea.Msg) (InstallActivity, tea.Cmd) {
 			m.err = msg.err
 		} else {
 			m.stage = stageFinished
+			m.app = msg.app
 		}
 		m.focused = true
 
@@ -213,13 +212,14 @@ func (m InstallActivity) runInstall() {
 
 	m.progressChan <- installProgressMsg{stage: stageDownloading, percentage: 0}
 
+	appName := docker.NameFromImageRef(m.imageRef)
 	hostname := m.hostname
 	if hostname == "" {
-		hostname = m.appName + ".localhost"
+		hostname = appName + ".localhost"
 	}
 
 	app := m.namespace.AddApplication(docker.ApplicationSettings{
-		Name:  m.appName,
+		Name:  appName,
 		Image: m.imageRef,
 		Host:  hostname,
 	})
@@ -234,5 +234,5 @@ func (m InstallActivity) runInstall() {
 	}
 
 	err := app.Deploy(ctx, progress)
-	m.doneChan <- installDoneMsg{appName: m.appName, err: err}
+	m.doneChan <- installDoneMsg{app: app, err: err}
 }

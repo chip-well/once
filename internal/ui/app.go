@@ -32,7 +32,7 @@ type scrapeTickMsg struct{}
 type scrapeDoneMsg struct{}
 type navigateToInstallMsg struct{}
 type navigateToDashboardMsg struct{}
-type navigateToAppMsg struct{ appName string }
+type navigateToAppMsg struct{ app *docker.Application }
 type navigateToSettingsMsg struct{ app *docker.Application }
 type quitMsg struct{}
 type switchAppMsg struct{ delta int }
@@ -120,14 +120,14 @@ func (m App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_ = m.namespace.Refresh(m.watchCtx)
 		apps := m.namespace.Applications()
 		for i, app := range apps {
-			if app.Settings.Name == msg.appName {
+			if app.Settings.Name == msg.app.Settings.Name {
 				m.currentIndex = i
-				m.currentScreen = NewDashboard(m.namespace, app, m.scraper, m.dockerScraper)
-				m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
-				return m, m.currentScreen.Init()
+				break
 			}
 		}
-		return m, nil
+		m.currentScreen = NewDashboard(m.namespace, msg.app, m.scraper, m.dockerScraper)
+		m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
+		return m, m.currentScreen.Init()
 	case navigateToDashboardMsg:
 		apps := m.namespace.Applications()
 		if len(apps) > 0 && m.currentIndex < len(apps) {
