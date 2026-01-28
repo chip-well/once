@@ -17,12 +17,36 @@ import (
 	"github.com/docker/docker/api/types/network"
 )
 
+type SMTPSettings struct {
+	Server   string `json:"s,omitempty"`
+	Port     string `json:"p,omitempty"`
+	Username string `json:"u,omitempty"`
+	Password string `json:"pw,omitempty"`
+}
+
+func (s SMTPSettings) Equal(other SMTPSettings) bool {
+	return s.Server == other.Server && s.Port == other.Port && s.Username == other.Username && s.Password == other.Password
+}
+
+func (s SMTPSettings) BuildEnv() []string {
+	if s.Server == "" {
+		return nil
+	}
+	return []string{
+		"SMTP_ADDRESS=" + s.Server,
+		"SMTP_PORT=" + s.Port,
+		"SMTP_USERNAME=" + s.Username,
+		"SMTP_PASSWORD=" + s.Password,
+	}
+}
+
 type ApplicationSettings struct {
 	Name       string            `json:"n"`
 	Image      string            `json:"i"`
 	Host       string            `json:"h"`
 	DisableTLS bool              `json:"dt"`
 	EnvVars    map[string]string `json:"env"`
+	SMTP       SMTPSettings      `json:"sm"`
 }
 
 func UnmarshalApplicationSettings(s string) (ApplicationSettings, error) {
@@ -54,6 +78,9 @@ func (s ApplicationSettings) Equal(other ApplicationSettings) bool {
 	if s.Name != other.Name || s.Image != other.Image || s.Host != other.Host || s.DisableTLS != other.DisableTLS {
 		return false
 	}
+	if !s.SMTP.Equal(other.SMTP) {
+		return false
+	}
 	if len(s.EnvVars) != len(other.EnvVars) {
 		return false
 	}
@@ -66,12 +93,15 @@ func (s ApplicationSettings) Equal(other ApplicationSettings) bool {
 }
 
 func (s ApplicationSettings) BuildEnv(secretKeyBase string) []string {
-	env := make([]string, 0, len(s.EnvVars)+2)
-	env = append(env, "SECRET_KEY_BASE="+secretKeyBase)
+	env := []string{
+		"SECRET_KEY_BASE=" + secretKeyBase,
+	}
 
 	if !s.TLSEnabled() {
 		env = append(env, "DISABLE_SSL=true")
 	}
+
+	env = append(env, s.SMTP.BuildEnv()...)
 
 	for k, v := range s.EnvVars {
 		env = append(env, k+"="+v)
