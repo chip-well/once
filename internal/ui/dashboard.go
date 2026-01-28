@@ -196,12 +196,8 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 	case NamespaceChangedMsg:
-		_ = m.namespace.Refresh(context.Background())
-		for _, app := range m.namespace.Applications() {
-			if app.Settings.Name == m.app.Settings.Name {
-				m.app = app
-				break
-			}
+		if app := m.namespace.Application(m.app.Settings.Name); app != nil {
+			m.app = app
 		}
 	}
 

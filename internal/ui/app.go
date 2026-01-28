@@ -106,6 +106,7 @@ func (m App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case NamespaceChangedMsg:
+		_ = m.namespace.Refresh(m.watchCtx)
 		m.currentScreen, _ = m.currentScreen.Update(msg)
 		return m, m.watchForChanges()
 	case scrapeTickMsg:
@@ -125,7 +126,7 @@ func (m App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
-		m.currentScreen = NewDashboard(m.namespace, msg.app, m.scraper, m.dockerScraper)
+		m.currentScreen = NewDashboard(m.namespace, apps[m.currentIndex], m.scraper, m.dockerScraper)
 		m.currentScreen, _ = m.currentScreen.Update(m.lastSize)
 		return m, m.currentScreen.Init()
 	case navigateToDashboardMsg:
