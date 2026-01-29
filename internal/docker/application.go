@@ -22,10 +22,11 @@ type SMTPSettings struct {
 	Port     string `json:"p,omitempty"`
 	Username string `json:"u,omitempty"`
 	Password string `json:"pw,omitempty"`
+	From     string `json:"f,omitempty"`
 }
 
 func (s SMTPSettings) Equal(other SMTPSettings) bool {
-	return s.Server == other.Server && s.Port == other.Port && s.Username == other.Username && s.Password == other.Password
+	return s.Server == other.Server && s.Port == other.Port && s.Username == other.Username && s.Password == other.Password && s.From == other.From
 }
 
 func (s SMTPSettings) BuildEnv() []string {
@@ -37,6 +38,7 @@ func (s SMTPSettings) BuildEnv() []string {
 		"SMTP_PORT=" + s.Port,
 		"SMTP_USERNAME=" + s.Username,
 		"SMTP_PASSWORD=" + s.Password,
+		"MAILER_FROM_ADDRESS=" + s.From,
 	}
 }
 

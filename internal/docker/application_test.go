@@ -20,6 +20,7 @@ func TestBuildEnvWithSMTP(t *testing.T) {
 			Port:     "587",
 			Username: "user@example.com",
 			Password: "secret",
+			From:     "noreply@example.com",
 		},
 	}
 
@@ -29,6 +30,7 @@ func TestBuildEnvWithSMTP(t *testing.T) {
 	assert.Contains(t, env, "SMTP_PORT=587")
 	assert.Contains(t, env, "SMTP_USERNAME=user@example.com")
 	assert.Contains(t, env, "SMTP_PASSWORD=secret")
+	assert.Contains(t, env, "MAILER_FROM_ADDRESS=noreply@example.com")
 }
 
 func TestBuildEnvWithoutSMTP(t *testing.T) {

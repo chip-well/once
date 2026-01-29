@@ -47,6 +47,21 @@ func TestSettingsForm_TabNavigation(t *testing.T) {
 	assert.Equal(t, settingsFieldTLS, form.focused)
 
 	form = settingsPressTab(form)
+	assert.Equal(t, settingsFieldSMTPServer, form.focused)
+
+	form = settingsPressTab(form)
+	assert.Equal(t, settingsFieldSMTPPort, form.focused)
+
+	form = settingsPressTab(form)
+	assert.Equal(t, settingsFieldSMTPUsername, form.focused)
+
+	form = settingsPressTab(form)
+	assert.Equal(t, settingsFieldSMTPPassword, form.focused)
+
+	form = settingsPressTab(form)
+	assert.Equal(t, settingsFieldSMTPFrom, form.focused)
+
+	form = settingsPressTab(form)
 	assert.Equal(t, settingsFieldSaveButton, form.focused)
 
 	form = settingsPressTab(form)
