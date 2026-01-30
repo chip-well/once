@@ -238,6 +238,30 @@ func TestLongAppName(t *testing.T) {
 	assert.Equal(t, longName, restoredApp.Settings.Name)
 }
 
+func TestContainerLogConfig(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	ns, err := docker.NewNamespace("amar-logconfig-test")
+	require.NoError(t, err)
+	defer ns.Teardown(ctx, true)
+
+	require.NoError(t, ns.EnsureNetwork(ctx))
+	require.NoError(t, ns.Proxy().Boot(ctx, getProxyPorts(t)))
+
+	app := ns.AddApplication(docker.ApplicationSettings{
+		Name:  "logtest",
+		Image: "ghcr.io/basecamp/once-campfire:main",
+	})
+	require.NoError(t, app.Deploy(ctx, nil))
+
+	assertContainerLogConfig(t, ctx, "amar-logconfig-test-proxy")
+
+	containerName, err := app.ContainerName(ctx)
+	require.NoError(t, err)
+	assertContainerLogConfig(t, ctx, containerName)
+}
+
 // Helpers
 
 func getFreePort(t *testing.T) int {
@@ -271,6 +295,20 @@ func assertContainerRunning(t *testing.T, ctx context.Context, name string, expe
 	} else {
 		assert.False(t, info.State.Running, "container should be stopped")
 	}
+}
+
+func assertContainerLogConfig(t *testing.T, ctx context.Context, name string) {
+	t.Helper()
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	require.NoError(t, err)
+	defer c.Close()
+
+	info, err := c.ContainerInspect(ctx, name)
+	require.NoError(t, err)
+
+	assert.Equal(t, "json-file", info.HostConfig.LogConfig.Type)
+	assert.Equal(t, docker.ContainerLogMaxSize, info.HostConfig.LogConfig.Config["max-size"])
+	assert.Equal(t, "1", info.HostConfig.LogConfig.Config["max-file"])
 }
 
 func countContainers(t *testing.T, ctx context.Context, prefix string) int {

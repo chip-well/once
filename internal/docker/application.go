@@ -208,6 +208,7 @@ func (a *Application) Deploy(ctx context.Context, progress DeployProgressCallbac
 		a.containerConfig(env),
 		&container.HostConfig{
 			RestartPolicy: container.RestartPolicy{Name: container.RestartPolicyAlways},
+			LogConfig:     ContainerLogConfig(),
 			Mounts: []mount.Mount{
 				{
 					Type:   mount.TypeVolume,

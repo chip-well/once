@@ -98,6 +98,7 @@ func (p *Proxy) Boot(ctx context.Context, settings ProxySettings) error {
 				metricsPortTCP: []nat.PortBinding{{HostIP: "127.0.0.1", HostPort: fmt.Sprintf("%d", settings.MetricsPort)}},
 			},
 			RestartPolicy: container.RestartPolicy{Name: container.RestartPolicyAlways},
+			LogConfig:     ContainerLogConfig(),
 			Mounts: []mount.Mount{
 				{
 					Type:   mount.TypeVolume,
