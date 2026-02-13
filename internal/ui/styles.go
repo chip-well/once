@@ -4,6 +4,7 @@ import (
 	"image/color"
 
 	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/compat"
 )
 
 type colors struct {
@@ -19,6 +20,7 @@ type colors struct {
 	Error           color.Color
 	Info            color.Color
 	Muted           color.Color
+	PanelBg         color.Color
 }
 
 var Colors = colors{
@@ -34,6 +36,10 @@ var Colors = colors{
 	Error:           lipgloss.Color("#ff5555"),
 	Info:            lipgloss.Color("#8be9fd"),
 	Muted:           lipgloss.Color("#bd93f9"),
+	PanelBg: compat.AdaptiveColor{
+		Light: lipgloss.Color("#e8e8e8"),
+		Dark:  lipgloss.Color("#1a1b26"),
+	},
 }
 
 var ChartColors = struct {
@@ -114,5 +120,4 @@ func (s styles) HelpLine(width int, content string) string {
 func (s styles) CenteredLine(width int, content string) string {
 	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(content)
 }
-
 
