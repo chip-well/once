@@ -13,6 +13,7 @@ type DeployCommand struct {
 	root *RootCommand
 	cmd  *cobra.Command
 	name string
+	host string
 }
 
 func NewDeployCommand(root *RootCommand) *DeployCommand {
@@ -24,6 +25,7 @@ func NewDeployCommand(root *RootCommand) *DeployCommand {
 		RunE:  WithNamespace(d.run),
 	}
 	d.cmd.Flags().StringVar(&d.name, "name", "", "application name (defaults to image name)")
+	d.cmd.Flags().StringVar(&d.host, "host", "", "hostname for the application (defaults to <name>.localhost)")
 	return d
 }
 
@@ -46,10 +48,15 @@ func (d *DeployCommand) run(ns *docker.Namespace, cmd *cobra.Command, args []str
 		return fmt.Errorf("%w: %w", docker.ErrSetupFailed, err)
 	}
 
+	host := d.host
+	if host == "" {
+		host = name + ".localhost"
+	}
+
 	app := ns.AddApplication(docker.ApplicationSettings{
 		Name:       name,
 		Image:      imageRef,
-		Host:       name + ".localhost",
+		Host:       host,
 		AutoUpdate: true,
 	})
 
