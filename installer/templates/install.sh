@@ -73,6 +73,11 @@ install_once() {
     os="$1"
     arch="$2"
 
+    if command -v once > /dev/null 2>&1; then
+        echo "once is already installed at $(command -v once)"
+        return
+    fi
+
     version=$(latest_version)
     echo "Installing once ${version}..."
 
@@ -101,6 +106,13 @@ install_once() {
     rm -f "$tmpfile"
 
     echo "Installed once to ${install_dir}/once"
+
+    echo "Installing background service..."
+    if is_root; then
+        once background install
+    else
+        sudo once background install
+    fi
 }
 
 run_once() {
