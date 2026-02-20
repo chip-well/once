@@ -239,7 +239,7 @@ func TestApplication_MouseTarget(t *testing.T) {
 
 	// Initialize sets up zones from first render
 	scr := &fakeScreen{}
-	app.initialize(scr, msgs, 80, 24)
+	app.initializeComponent(scr, msgs, 80, 24)
 
 	// Send a mouse click at position (0, 0) — inside the "btn" zone
 	msgs <- MouseMsg{Button: MouseLeft, Type: MousePress, X: 0, Y: 0}

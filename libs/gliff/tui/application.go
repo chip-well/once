@@ -36,31 +36,38 @@ func NewApplication(c Component) *Application {
 }
 
 func (a *Application) Run() error {
+	closeTerminal, err := a.initializeTerminal()
+	if err != nil {
+		return err
+	}
+	defer closeTerminal()
+
+	width, height := a.term.Size()
+	screen := renderer.NewScreen(a.term, width, height)
+	msgs := make(chan Msg)
+
+	defer a.handleResizeEvents(msgs)()
+	defer a.handleInputEvents(msgs)()
+
+	a.initializeComponent(screen, msgs, width, height)
+	return a.eventLoop(screen, msgs)
+}
+
+// Private
+
+func (a *Application) initializeTerminal() (func() error, error) {
 	if a.term == nil {
 		t, err := renderer.NewTerminal()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		a.term = t
 	}
 
 	if err := a.term.EnterFullScreen(); err != nil {
-		return err
+		return nil, err
 	}
-	defer a.term.ExitFullScreen()
-
-	// Create screen and message channel
-	width, height := a.term.Size()
-	screen := renderer.NewScreen(a.term, width, height)
-	msgs := make(chan Msg)
-
-	// Start event sources
-	defer a.handleResizeEvents(msgs)()
-	defer a.handleInputEvents(msgs)()
-
-	// Initialize component and run event loop
-	a.initialize(screen, msgs, width, height)
-	return a.eventLoop(screen, msgs)
+	return a.term.ExitFullScreen, nil
 }
 
 func (a *Application) handleResizeEvents(msgs chan<- Msg) (stop func()) {
@@ -89,7 +96,7 @@ func (a *Application) handleInputEvents(msgs chan<- Msg) (stop func()) {
 	return input.Stop
 }
 
-func (a *Application) initialize(s screen, msgs chan Msg, width, height int) {
+func (a *Application) initializeComponent(s screen, msgs chan Msg, width, height int) {
 	a.runCmd(a.component.Init(), msgs)
 	a.runCmd(a.component.Update(WindowSizeMsg{Width: width, Height: height}), msgs)
 	s.Render(a.mouseTracker.Sweep(a.component.Render()))

@@ -97,14 +97,14 @@ func TestRunCmd(t *testing.T) {
 	})
 }
 
-// initialize tests
+// initializeComponent tests
 
-func TestInitialize(t *testing.T) {
+func TestInitializeComponent(t *testing.T) {
 	init := func(comp *recordingComponent) *recordingScreen {
 		app := NewApplication(comp)
 		scr := &recordingScreen{}
 		msgs := make(chan Msg, 10)
-		app.initialize(scr, msgs, 80, 24)
+		app.initializeComponent(scr, msgs, 80, 24)
 		return scr
 	}
 
@@ -410,7 +410,7 @@ func TestRun(t *testing.T) {
 	assert.True(t, mock.enterCalled)
 	assert.True(t, mock.exitCalled)
 
-	// Component should have received WindowSizeMsg (from initialize) and KeyMsg
+	// Component should have received WindowSizeMsg (from initializeComponent) and KeyMsg
 	require.Len(t, comp.messages, 2)
 	assert.Equal(t, WindowSizeMsg{Width: 80, Height: 24}, comp.messages[0])
 	km, ok := comp.messages[1].(KeyMsg)
