@@ -1,7 +1,7 @@
 package renderer
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -43,7 +43,7 @@ func RGBColor(r, g, b uint8) Color {
 
 // Equal returns true if two colors are identical.
 func (c Color) Equal(other Color) bool {
-	return c.Type == other.Type && c.Value == other.Value
+	return c == other
 }
 
 // Style represents the visual attributes of a cell.
@@ -70,21 +70,12 @@ func DefaultStyle() Style {
 
 // Equal returns true if two styles are identical.
 func (s Style) Equal(other Style) bool {
-	return s.FG.Equal(other.FG) &&
-		s.BG.Equal(other.BG) &&
-		s.Bold == other.Bold &&
-		s.Dim == other.Dim &&
-		s.Italic == other.Italic &&
-		s.Underline == other.Underline &&
-		s.Blink == other.Blink &&
-		s.Reverse == other.Reverse &&
-		s.Hidden == other.Hidden &&
-		s.Strikethrough == other.Strikethrough
+	return s == other
 }
 
 // IsDefault returns true if this style has no attributes set.
 func (s Style) IsDefault() bool {
-	return s.Equal(DefaultStyle())
+	return s == Style{}
 }
 
 // Cell represents a single character cell on the terminal.
@@ -101,151 +92,102 @@ func EmptyCell() Cell {
 
 // Equal returns true if two cells are identical.
 func (c Cell) Equal(other Cell) bool {
-	return c.Rune == other.Rune && c.Width == other.Width && c.Style.Equal(other.Style)
+	return c == other
 }
 
 // sgrSequence returns the SGR escape sequence to transition from one style to another.
-// If from is nil, assumes we're starting from reset state.
 func sgrSequence(from, to Style) string {
-	// If target is default, just reset
+	if from == to {
+		return ""
+	}
 	if to.IsDefault() {
-		if from.IsDefault() {
-			return ""
-		}
 		return SGRReset
 	}
 
-	// Determine if it's cheaper to reset and set everything fresh
-	// vs. incrementally change attributes
-	var incremental strings.Builder
-	var fresh strings.Builder
+	// Build incremental sequence (only the differences)
 	var codes []string
 
-	// Build fresh sequence (after reset)
-	freshCodes := styleToSGRCodes(to)
-	if len(freshCodes) > 0 {
-		fresh.WriteString(CSI)
-		fresh.WriteString("0") // reset
-		for _, code := range freshCodes {
-			fresh.WriteString(";")
-			fresh.WriteString(code)
-		}
-		fresh.WriteString("m")
-	} else {
-		fresh.WriteString(SGRReset)
-	}
-
-	// Build incremental sequence
-	if !from.FG.Equal(to.FG) {
+	if from.FG != to.FG {
 		codes = append(codes, colorToSGR(to.FG, true))
 	}
-	if !from.BG.Equal(to.BG) {
+	if from.BG != to.BG {
 		codes = append(codes, colorToSGR(to.BG, false))
 	}
-	if from.Bold != to.Bold {
-		if to.Bold {
-			codes = append(codes, fmt.Sprintf("%d", SGRBold))
-		} else {
-			codes = append(codes, fmt.Sprintf("%d", SGRBoldOff))
-		}
+
+	type attrDiff struct {
+		from, to bool
+		on, off  int
 	}
-	if from.Dim != to.Dim {
-		if to.Dim {
-			codes = append(codes, fmt.Sprintf("%d", SGRDim))
-		} else {
-			codes = append(codes, fmt.Sprintf("%d", SGRDimOff))
-		}
-	}
-	if from.Italic != to.Italic {
-		if to.Italic {
-			codes = append(codes, fmt.Sprintf("%d", SGRItalic))
-		} else {
-			codes = append(codes, fmt.Sprintf("%d", SGRItalicOff))
-		}
-	}
-	if from.Underline != to.Underline {
-		if to.Underline {
-			codes = append(codes, fmt.Sprintf("%d", SGRUnderline))
-		} else {
-			codes = append(codes, fmt.Sprintf("%d", SGRUnderlineOff))
-		}
-	}
-	if from.Blink != to.Blink {
-		if to.Blink {
-			codes = append(codes, fmt.Sprintf("%d", SGRBlink))
-		} else {
-			codes = append(codes, fmt.Sprintf("%d", SGRBlinkOff))
-		}
-	}
-	if from.Reverse != to.Reverse {
-		if to.Reverse {
-			codes = append(codes, fmt.Sprintf("%d", SGRReverse))
-		} else {
-			codes = append(codes, fmt.Sprintf("%d", SGRReverseOff))
-		}
-	}
-	if from.Hidden != to.Hidden {
-		if to.Hidden {
-			codes = append(codes, fmt.Sprintf("%d", SGRHidden))
-		} else {
-			codes = append(codes, fmt.Sprintf("%d", SGRHiddenOff))
-		}
-	}
-	if from.Strikethrough != to.Strikethrough {
-		if to.Strikethrough {
-			codes = append(codes, fmt.Sprintf("%d", SGRStrikethrough))
-		} else {
-			codes = append(codes, fmt.Sprintf("%d", SGRStrikethroughOff))
+	for _, a := range [...]attrDiff{
+		{from.Bold, to.Bold, SGRBold, SGRBoldOff},
+		{from.Dim, to.Dim, SGRDim, SGRDimOff},
+		{from.Italic, to.Italic, SGRItalic, SGRItalicOff},
+		{from.Underline, to.Underline, SGRUnderline, SGRUnderlineOff},
+		{from.Blink, to.Blink, SGRBlink, SGRBlinkOff},
+		{from.Reverse, to.Reverse, SGRReverse, SGRReverseOff},
+		{from.Hidden, to.Hidden, SGRHidden, SGRHiddenOff},
+		{from.Strikethrough, to.Strikethrough, SGRStrikethrough, SGRStrikethroughOff},
+	} {
+		if a.from != a.to {
+			if a.to {
+				codes = append(codes, strconv.Itoa(a.on))
+			} else {
+				codes = append(codes, strconv.Itoa(a.off))
+			}
 		}
 	}
 
-	if len(codes) > 0 {
-		incremental.WriteString(CSI)
-		incremental.WriteString(strings.Join(codes, ";"))
-		incremental.WriteString("m")
-	}
-
-	// Return the shorter one
-	incStr := incremental.String()
-	freshStr := fresh.String()
-
-	if len(incStr) == 0 {
+	if len(codes) == 0 {
 		return ""
 	}
-	if len(incStr) <= len(freshStr) {
-		return incStr
+
+	incremental := CSI + strings.Join(codes, ";") + "m"
+
+	// With few changes, the incremental path is always shorter than
+	// a full reset+set, so skip building the fresh sequence.
+	if len(codes) <= 2 {
+		return incremental
 	}
-	return freshStr
+
+	// Build fresh sequence (reset + set all attributes) and pick the shorter one
+	freshCodes := styleToSGRCodes(to)
+	var fresh strings.Builder
+	fresh.WriteString(CSI)
+	fresh.WriteString("0")
+	for _, code := range freshCodes {
+		fresh.WriteByte(';')
+		fresh.WriteString(code)
+	}
+	fresh.WriteByte('m')
+
+	if freshStr := fresh.String(); len(freshStr) < len(incremental) {
+		return freshStr
+	}
+	return incremental
 }
 
 // styleToSGRCodes returns the SGR codes needed to set the given style from reset.
 func styleToSGRCodes(s Style) []string {
 	var codes []string
 
-	if s.Bold {
-		codes = append(codes, fmt.Sprintf("%d", SGRBold))
+	for _, a := range [...]struct {
+		set  bool
+		code int
+	}{
+		{s.Bold, SGRBold},
+		{s.Dim, SGRDim},
+		{s.Italic, SGRItalic},
+		{s.Underline, SGRUnderline},
+		{s.Blink, SGRBlink},
+		{s.Reverse, SGRReverse},
+		{s.Hidden, SGRHidden},
+		{s.Strikethrough, SGRStrikethrough},
+	} {
+		if a.set {
+			codes = append(codes, strconv.Itoa(a.code))
+		}
 	}
-	if s.Dim {
-		codes = append(codes, fmt.Sprintf("%d", SGRDim))
-	}
-	if s.Italic {
-		codes = append(codes, fmt.Sprintf("%d", SGRItalic))
-	}
-	if s.Underline {
-		codes = append(codes, fmt.Sprintf("%d", SGRUnderline))
-	}
-	if s.Blink {
-		codes = append(codes, fmt.Sprintf("%d", SGRBlink))
-	}
-	if s.Reverse {
-		codes = append(codes, fmt.Sprintf("%d", SGRReverse))
-	}
-	if s.Hidden {
-		codes = append(codes, fmt.Sprintf("%d", SGRHidden))
-	}
-	if s.Strikethrough {
-		codes = append(codes, fmt.Sprintf("%d", SGRStrikethrough))
-	}
+
 	if s.FG.Type != ColorDefault {
 		codes = append(codes, colorToSGR(s.FG, true))
 	}
@@ -261,33 +203,33 @@ func colorToSGR(c Color, foreground bool) string {
 	switch c.Type {
 	case ColorDefault:
 		if foreground {
-			return fmt.Sprintf("%d", SGRFGDefault)
+			return strconv.Itoa(SGRFGDefault)
 		}
-		return fmt.Sprintf("%d", SGRBGDefault)
+		return strconv.Itoa(SGRBGDefault)
 	case ColorBasic:
 		if foreground {
 			if c.Value < 8 {
-				return fmt.Sprintf("%d", SGRFGBlack+int(c.Value))
+				return strconv.Itoa(SGRFGBlack + int(c.Value))
 			}
-			return fmt.Sprintf("%d", SGRFGBrightBlack+int(c.Value-8))
+			return strconv.Itoa(SGRFGBrightBlack + int(c.Value-8))
 		}
 		if c.Value < 8 {
-			return fmt.Sprintf("%d", SGRBGBlack+int(c.Value))
+			return strconv.Itoa(SGRBGBlack + int(c.Value))
 		}
-		return fmt.Sprintf("%d", SGRBGBrightBlack+int(c.Value-8))
+		return strconv.Itoa(SGRBGBrightBlack + int(c.Value-8))
 	case Color256:
 		if foreground {
-			return fmt.Sprintf("38;5;%d", c.Value)
+			return "38;5;" + strconv.Itoa(int(c.Value))
 		}
-		return fmt.Sprintf("48;5;%d", c.Value)
+		return "48;5;" + strconv.Itoa(int(c.Value))
 	case ColorRGB:
 		r := (c.Value >> 16) & 0xFF
 		g := (c.Value >> 8) & 0xFF
 		b := c.Value & 0xFF
 		if foreground {
-			return fmt.Sprintf("38;2;%d;%d;%d", r, g, b)
+			return "38;2;" + strconv.Itoa(int(r)) + ";" + strconv.Itoa(int(g)) + ";" + strconv.Itoa(int(b))
 		}
-		return fmt.Sprintf("48;2;%d;%d;%d", r, g, b)
+		return "48;2;" + strconv.Itoa(int(r)) + ";" + strconv.Itoa(int(g)) + ";" + strconv.Itoa(int(b))
 	}
 	return ""
 }

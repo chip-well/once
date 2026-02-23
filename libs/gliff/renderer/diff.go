@@ -1,7 +1,7 @@
 package renderer
 
 import (
-	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -219,10 +219,10 @@ func diffLine(row int, old, new []Cell) *LineChange {
 
 	// Optimization: check if it's cheaper to clear the line and rewrite
 	// vs. doing sparse updates
+	const cursorMoveCost = 6 // approximate bytes for a cursor position sequence
 	sparseLen := 0
 	for _, span := range spans {
-		// Cursor movement cost + content
-		sparseLen += 6 + len(span.Cells) // Rough estimate
+		sparseLen += cursorMoveCost + len(span.Cells)
 	}
 	fullLen := len(new)
 
@@ -320,7 +320,7 @@ func Diff(old, new *Buffer, currentStyle *Style) (string, Style) {
 		}
 
 		// Check if lines are identical via hash
-		// FNV-1a is good enough - collisions are astronomically unlikely
+		// djb2 hash - collisions are astronomically unlikely
 		if old.hashes[row] == new.hashes[row] {
 			continue // No change
 		}
@@ -341,25 +341,14 @@ func Diff(old, new *Buffer, currentStyle *Style) (string, Style) {
 func applyScroll(op *ScrollOp, screenHeight int) string {
 	var out strings.Builder
 
-	// Set scroll region if needed
 	if op.Top != 0 || op.Bottom != screenHeight-1 {
-		out.WriteString(fmt.Sprintf(ScrollRegionSet, op.Top+1, op.Bottom+1))
+		writeScrollRegion(&out, op.Top+1, op.Bottom+1)
 	}
 
-	// Position cursor within scroll region (some terminals require this)
-	// Move to the top-left of the scroll region
-	out.WriteString(fmt.Sprintf(CursorPosition, op.Top+1, 1))
+	writeCursorPosition(&out, op.Top+1, 1)
 
-	// Perform scroll
-	if op.Direction > 0 {
-		// Scroll up
-		out.WriteString(fmt.Sprintf(ScrollUp, op.Amount))
-	} else {
-		// Scroll down
-		out.WriteString(fmt.Sprintf(ScrollDown, op.Amount))
-	}
+	writeScrollAmount(&out, op.Direction, op.Amount)
 
-	// Reset scroll region
 	if op.Top != 0 || op.Bottom != screenHeight-1 {
 		out.WriteString(ScrollRegionReset)
 	}
@@ -367,44 +356,51 @@ func applyScroll(op *ScrollOp, screenHeight int) string {
 	return out.String()
 }
 
-// simulateScroll applies a scroll operation to a buffer copy.
-// Returns a new buffer representing what would be on screen after scrolling.
+// simulateScroll applies a scroll operation to a buffer, returning a new buffer
+// representing what would be on screen after scrolling. Row slices are shared
+// with the original for moved rows; only vacated rows are newly allocated.
+// This is safe because the result is only used for reading during diff.
 func simulateScroll(buf *Buffer, op *ScrollOp) *Buffer {
-	result := buf.Clone()
+	result := &Buffer{
+		Width:  buf.Width,
+		Height: buf.Height,
+		Cells:  make([][]Cell, buf.Height),
+		hashes: make([]uint64, buf.Height),
+	}
+
+	copy(result.Cells, buf.Cells)
+	copy(result.hashes, buf.hashes)
 
 	if op.Direction > 0 {
-		// Scroll up: move lines up, clear at bottom
 		for i := op.Top; i <= op.Bottom-op.Amount; i++ {
-			if i+op.Amount <= op.Bottom {
-				copy(result.Cells[i], buf.Cells[i+op.Amount])
-				result.hashes[i] = buf.hashes[i+op.Amount]
-			}
+			result.Cells[i] = buf.Cells[i+op.Amount]
+			result.hashes[i] = buf.hashes[i+op.Amount]
 		}
-		// Clear the bottom lines that are now blank
 		for i := op.Bottom - op.Amount + 1; i <= op.Bottom; i++ {
-			for j := range result.Cells[i] {
-				result.Cells[i][j] = EmptyCell()
-			}
+			result.Cells[i] = makeEmptyRow(buf.Width)
 			result.hashes[i] = hashLine(result.Cells[i])
 		}
 	} else {
-		// Scroll down: move lines down, clear at top
 		for i := op.Bottom; i >= op.Top+op.Amount; i-- {
-			if i-op.Amount >= op.Top {
-				copy(result.Cells[i], buf.Cells[i-op.Amount])
-				result.hashes[i] = buf.hashes[i-op.Amount]
-			}
+			result.Cells[i] = buf.Cells[i-op.Amount]
+			result.hashes[i] = buf.hashes[i-op.Amount]
 		}
-		// Clear the top lines that are now blank
 		for i := op.Top; i < op.Top+op.Amount; i++ {
-			for j := range result.Cells[i] {
-				result.Cells[i][j] = EmptyCell()
-			}
+			result.Cells[i] = makeEmptyRow(buf.Width)
 			result.hashes[i] = hashLine(result.Cells[i])
 		}
 	}
 
 	return result
+}
+
+func makeEmptyRow(width int) []Cell {
+	row := make([]Cell, width)
+	empty := EmptyCell()
+	for j := range row {
+		row[j] = empty
+	}
+	return row
 }
 
 // renderChange generates the escape sequences to apply a line change.
@@ -413,38 +409,14 @@ func renderChange(change *LineChange, currentStyle Style, width int) (string, St
 	style := currentStyle
 
 	for _, span := range change.Spans {
-		// Move cursor to position
-		out.WriteString(fmt.Sprintf(CursorPosition, change.Row+1, span.Col+1))
-
-		// Write cells
-		for _, cell := range span.Cells {
-			// Handle style change
-			if !cell.Style.Equal(style) {
-				seq := sgrSequence(style, cell.Style)
-				out.WriteString(seq)
-				style = cell.Style
-			}
-
-			// Write character
-			if cell.Width == 0 {
-				// Skip continuation cells (they follow wide characters)
-				continue
-			}
-			if cell.Rune == 0 {
-				out.WriteRune(' ')
-			} else {
-				out.WriteRune(cell.Rune)
-			}
-		}
+		writeCursorPosition(&out, change.Row+1, span.Col+1)
+		style = writeCells(&out, span.Cells, style)
 	}
 
-	// Clear to end of line if needed
 	if change.ClearEOL {
-		// If no spans were written, position cursor first
 		if len(change.Spans) == 0 {
-			out.WriteString(fmt.Sprintf(CursorPosition, change.Row+1, change.ClearCol+1))
+			writeCursorPosition(&out, change.Row+1, change.ClearCol+1)
 		}
-		// Reset style before clearing (so we clear with default background)
 		if !style.IsDefault() {
 			out.WriteString(SGRReset)
 			style = DefaultStyle()
@@ -460,40 +432,68 @@ func FullRedraw(buf *Buffer) string {
 	var out strings.Builder
 	style := DefaultStyle()
 
-	// Reset style and clear screen
 	out.WriteString(SGRReset)
 	out.WriteString(CursorHome)
 	out.WriteString(EraseScreen)
 
-	// Write all lines
 	for row := range buf.Height {
-		fmt.Fprintf(&out, CursorPosition, row+1, 1)
-
-		for _, cell := range buf.Cells[row] {
-			if cell.Width == 0 {
-				continue // Skip continuation cells
-			}
-
-			// Handle style change
-			if !cell.Style.Equal(style) {
-				seq := sgrSequence(style, cell.Style)
-				out.WriteString(seq)
-				style = cell.Style
-			}
-
-			// Write character
-			if cell.Rune == 0 {
-				out.WriteRune(' ')
-			} else {
-				out.WriteRune(cell.Rune)
-			}
-		}
+		writeCursorPosition(&out, row+1, 1)
+		style = writeCells(&out, buf.Cells[row], style)
 	}
 
-	// Reset style at end
 	if !style.IsDefault() {
 		out.WriteString(SGRReset)
 	}
 
 	return out.String()
+}
+
+// Helpers
+
+// writeCells writes cells to the builder, handling style transitions and special cell types.
+func writeCells(out *strings.Builder, cells []Cell, style Style) Style {
+	for _, cell := range cells {
+		if cell.Style != style {
+			out.WriteString(sgrSequence(style, cell.Style))
+			style = cell.Style
+		}
+		if cell.Width == 0 {
+			continue
+		}
+		if cell.Rune == 0 {
+			out.WriteRune(' ')
+		} else {
+			out.WriteRune(cell.Rune)
+		}
+	}
+	return style
+}
+
+// writeCursorPosition writes a cursor position escape sequence.
+func writeCursorPosition(out *strings.Builder, row, col int) {
+	out.WriteString(CSI)
+	out.WriteString(strconv.Itoa(row))
+	out.WriteByte(';')
+	out.WriteString(strconv.Itoa(col))
+	out.WriteByte('H')
+}
+
+// writeScrollRegion writes a set-scroll-region escape sequence.
+func writeScrollRegion(out *strings.Builder, top, bottom int) {
+	out.WriteString(CSI)
+	out.WriteString(strconv.Itoa(top))
+	out.WriteByte(';')
+	out.WriteString(strconv.Itoa(bottom))
+	out.WriteByte('r')
+}
+
+// writeScrollAmount writes a scroll up or down escape sequence.
+func writeScrollAmount(out *strings.Builder, direction, amount int) {
+	out.WriteString(CSI)
+	out.WriteString(strconv.Itoa(amount))
+	if direction > 0 {
+		out.WriteByte('S')
+	} else {
+		out.WriteByte('T')
+	}
 }

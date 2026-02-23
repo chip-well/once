@@ -198,6 +198,22 @@ func TestRenderChange_WithStyle(t *testing.T) {
 	assert.Equal(t, uint32(1), newStyle.FG.Value)
 }
 
+func TestDiff_DetectsItalicChange(t *testing.T) {
+	old := NewBuffer(5, 1)
+	new := NewBuffer(5, 1)
+
+	old.Cells[0][0] = Cell{Rune: 'A', Width: 1, Style: DefaultStyle()}
+	new.Cells[0][0] = Cell{Rune: 'A', Width: 1, Style: Style{Italic: true}}
+
+	old.computeHashes()
+	new.computeHashes()
+
+	style := DefaultStyle()
+	output, _ := Diff(old, new, &style)
+
+	assert.NotEqual(t, "", output, "should detect italic change")
+}
+
 func TestDiff_StyleChange(t *testing.T) {
 	old := NewBuffer(5, 1)
 	new := NewBuffer(5, 1)

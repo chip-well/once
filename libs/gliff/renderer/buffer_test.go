@@ -142,6 +142,43 @@ func TestHashLine_Consistency(t *testing.T) {
 	assert.Equal(t, hash1, hash2)
 }
 
+func TestHashLine_AllAttributesMatter(t *testing.T) {
+	makeLine := func(s Style) []Cell {
+		cells := make([]Cell, 5)
+		for i := range cells {
+			cells[i] = Cell{Rune: 'A', Width: 1, Style: s}
+		}
+		return cells
+	}
+
+	baseHash := hashLine(makeLine(DefaultStyle()))
+
+	// Every boolean attribute must produce a distinct hash
+	attributes := []struct {
+		name  string
+		style Style
+	}{
+		{"Bold", Style{Bold: true}},
+		{"Dim", Style{Dim: true}},
+		{"Italic", Style{Italic: true}},
+		{"Underline", Style{Underline: true}},
+		{"Blink", Style{Blink: true}},
+		{"Reverse", Style{Reverse: true}},
+		{"Hidden", Style{Hidden: true}},
+		{"Strikethrough", Style{Strikethrough: true}},
+	}
+
+	hashes := make(map[uint64]string)
+	for _, a := range attributes {
+		h := hashLine(makeLine(a.style))
+		assert.NotEqual(t, baseHash, h, "%s should differ from default", a.name)
+		if prev, ok := hashes[h]; ok {
+			t.Errorf("%s and %s produced the same hash", a.name, prev)
+		}
+		hashes[h] = a.name
+	}
+}
+
 func TestHashLine_StyleMatters(t *testing.T) {
 	cells1 := make([]Cell, 5)
 	cells2 := make([]Cell, 5)

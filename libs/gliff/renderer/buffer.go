@@ -98,24 +98,17 @@ func hashLine(cells []Cell) uint64 {
 
 	for i := range cells {
 		c := &cells[i]
-		// Hash rune (primary content)
 		h = (h << 5) + h + uint64(c.Rune)
-		// Hash style attributes compactly
-		if c.Style.FG.Type != ColorDefault || c.Style.BG.Type != ColorDefault {
-			h = (h << 5) + h + uint64(c.Style.FG.Type)<<24 + uint64(c.Style.FG.Value)
-			h = (h << 5) + h + uint64(c.Style.BG.Type)<<24 + uint64(c.Style.BG.Value)
+
+		s := &c.Style
+		if s.FG.Type != ColorDefault || s.BG.Type != ColorDefault {
+			h = (h << 5) + h + uint64(s.FG.Type)<<24 + uint64(s.FG.Value)
+			h = (h << 5) + h + uint64(s.BG.Type)<<24 + uint64(s.BG.Value)
 		}
-		if c.Style.Bold || c.Style.Underline || c.Style.Reverse {
-			var flags uint64
-			if c.Style.Bold {
-				flags |= 1
-			}
-			if c.Style.Underline {
-				flags |= 2
-			}
-			if c.Style.Reverse {
-				flags |= 4
-			}
+
+		flags := b2u(s.Bold) | b2u(s.Dim)<<1 | b2u(s.Italic)<<2 | b2u(s.Underline)<<3 |
+			b2u(s.Blink)<<4 | b2u(s.Reverse)<<5 | b2u(s.Hidden)<<6 | b2u(s.Strikethrough)<<7
+		if flags != 0 {
 			h = (h << 5) + h + flags
 		}
 	}
@@ -157,4 +150,14 @@ func LinesEqual(a, b *Buffer, i int) bool {
 		}
 	}
 	return true
+}
+
+// Helpers
+
+// b2u converts a bool to a uint64 (0 or 1) without branching.
+func b2u(b bool) uint64 {
+	if b {
+		return 1
+	}
+	return 0
 }

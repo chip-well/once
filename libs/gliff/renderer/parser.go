@@ -160,61 +160,17 @@ func (p *parser) handleSGR(params []int) {
 		case 30, 31, 32, 33, 34, 35, 36, 37:
 			p.style.FG = BasicColor(uint8(param - 30))
 		case 38:
-			// Extended foreground color
-			if i < len(params) {
-				switch params[i] {
-				case 5: // 256 color
-					if i+1 < len(params) {
-						p.style.FG = PaletteColor(uint8(params[i+1]))
-						i += 2
-					} else {
-						i++
-					}
-				case 2: // RGB
-					if i+3 < len(params) {
-						p.style.FG = RGBColor(
-							uint8(params[i+1]),
-							uint8(params[i+2]),
-							uint8(params[i+3]),
-						)
-						i += 4
-					} else {
-						i++
-					}
-				default:
-					i++
-				}
-			}
+			color, consumed := parseExtendedColor(params, i)
+			p.style.FG = color
+			i += consumed
 		case 39:
 			p.style.FG = DefaultColor()
 		case 40, 41, 42, 43, 44, 45, 46, 47:
 			p.style.BG = BasicColor(uint8(param - 40))
 		case 48:
-			// Extended background color
-			if i < len(params) {
-				switch params[i] {
-				case 5: // 256 color
-					if i+1 < len(params) {
-						p.style.BG = PaletteColor(uint8(params[i+1]))
-						i += 2
-					} else {
-						i++
-					}
-				case 2: // RGB
-					if i+3 < len(params) {
-						p.style.BG = RGBColor(
-							uint8(params[i+1]),
-							uint8(params[i+2]),
-							uint8(params[i+3]),
-						)
-						i += 4
-					} else {
-						i++
-					}
-				default:
-					i++
-				}
-			}
+			color, consumed := parseExtendedColor(params, i)
+			p.style.BG = color
+			i += consumed
 		case 49:
 			p.style.BG = DefaultColor()
 		case 90, 91, 92, 93, 94, 95, 96, 97:
@@ -282,4 +238,26 @@ func stripANSI(s string) string {
 	}
 
 	return result.String()
+}
+
+// parseExtendedColor parses an extended color (256-color or RGB) from SGR parameters
+// starting at index i. Returns the parsed color and the number of parameters consumed.
+func parseExtendedColor(params []int, i int) (Color, int) {
+	if i >= len(params) {
+		return DefaultColor(), 0
+	}
+	switch params[i] {
+	case 5: // 256 color
+		if i+1 < len(params) {
+			return PaletteColor(uint8(params[i+1])), 2
+		}
+		return DefaultColor(), 1
+	case 2: // RGB
+		if i+3 < len(params) {
+			return RGBColor(uint8(params[i+1]), uint8(params[i+2]), uint8(params[i+3])), 4
+		}
+		return DefaultColor(), 1
+	default:
+		return DefaultColor(), 1
+	}
 }
