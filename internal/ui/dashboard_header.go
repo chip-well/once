@@ -1,0 +1,202 @@
+package ui
+
+import (
+	"fmt"
+	"slices"
+	"strings"
+
+	"charm.land/lipgloss/v2"
+
+	"github.com/basecamp/once/internal/system"
+)
+
+const (
+	headerChartHeight = 6
+	headerBorderLines = 2
+	headerTotalHeight = headerChartHeight + headerBorderLines
+	headerMinWidth    = 80
+)
+
+type DashboardHeader struct {
+	scraper  *system.Scraper
+	cpuChart Chart
+	memChart Chart
+}
+
+func NewDashboardHeader(scraper *system.Scraper) DashboardHeader {
+	cpuTitle := fmt.Sprintf("CPU (%d cores)", scraper.NumCPUs())
+
+	memTitle := "Memory"
+	if total := scraper.MemTotal(); total > 0 {
+		memTitle = fmt.Sprintf("Memory (%s)", UnitBytes.Format(float64(total)))
+	}
+
+	return DashboardHeader{
+		scraper:  scraper,
+		cpuChart: NewChart(cpuTitle, UnitPercent),
+		memChart: NewChart(memTitle, UnitBytes),
+	}
+}
+
+func (h DashboardHeader) Height(width int) int {
+	if width < headerMinWidth {
+		return 0
+	}
+	return headerTotalHeight
+}
+
+func (h DashboardHeader) View(width int) string {
+	if width < headerMinWidth {
+		return ""
+	}
+
+	if total := h.scraper.MemTotal(); total > 0 {
+		h.memChart = NewChart(fmt.Sprintf("Memory (%s)", UnitBytes.Format(float64(total))), UnitBytes)
+	}
+
+	gap := 1
+	totalGaps := 2 * gap
+	panelWidth := (width - totalGaps) / 3
+	remainder := width - totalGaps - panelWidth*3
+
+	leftWidth := panelWidth
+	midWidth := panelWidth
+	rightWidth := panelWidth
+
+	// Distribute remainder pixels to left and middle panels
+	if remainder >= 1 {
+		leftWidth++
+		remainder--
+	}
+	if remainder >= 1 {
+		midWidth++
+	}
+
+	cpuView := h.renderCPUChart(leftWidth)
+	memView := h.renderMemChart(midWidth)
+	diskView := h.renderDiskGauge(rightWidth)
+
+	spacer := strings.Repeat(" ", gap)
+	return lipgloss.JoinHorizontal(lipgloss.Top, cpuView, spacer, memView, spacer, diskView)
+}
+
+// Private
+
+func (h DashboardHeader) renderCPUChart(width int) string {
+	samples := h.scraper.Fetch(ChartHistoryLength)
+	data := make([]float64, len(samples))
+	for i, s := range samples {
+		data[i] = s.CPUPercent
+	}
+	slices.Reverse(data)
+
+	scaleMax := float64(h.scraper.NumCPUs()) * 100
+	scale := ChartScale{max: scaleMax}
+
+	return h.cpuChart.View(data, width, headerTotalHeight, scale)
+}
+
+func (h DashboardHeader) renderMemChart(width int) string {
+	samples := h.scraper.Fetch(ChartHistoryLength)
+	data := make([]float64, len(samples))
+	for i, s := range samples {
+		data[i] = float64(s.MemUsed)
+	}
+	slices.Reverse(data)
+
+	scaleMax := float64(h.scraper.MemTotal())
+	scale := ChartScale{max: scaleMax}
+
+	return h.memChart.View(data, width, headerTotalHeight, scale)
+}
+
+func (h DashboardHeader) renderDiskGauge(width int) string {
+	samples := h.scraper.Fetch(1)
+
+	borderStyle := lipgloss.NewStyle().Foreground(Colors.Border)
+
+	innerWidth := width - 2
+
+	// Top border
+	title := "Disk"
+	titleLen := len(title)
+	topFill := max(innerWidth-1-titleLen, 0)
+	topLine := borderStyle.Render("╭─"+title+strings.Repeat("─", topFill)+"╮") + "\n"
+
+	// Bottom border
+	bottomLine := borderStyle.Render("╰" + strings.Repeat("─", innerWidth) + "╯")
+
+	left := borderStyle.Render("│")
+	right := borderStyle.Render("│")
+
+	contentRows := headerChartHeight
+
+	if len(samples) == 0 || samples[0].DiskErr != nil || samples[0].DiskTotal == 0 {
+		emptyLines := make([]string, contentRows)
+		for i := range emptyLines {
+			padding := strings.Repeat(" ", innerWidth)
+			emptyLines[i] = left + padding + right
+		}
+		return topLine + strings.Join(emptyLines, "\n") + "\n" + bottomLine
+	}
+
+	sample := samples[0]
+	pct := float64(sample.DiskUsed) / float64(sample.DiskTotal) * 100
+
+	pctLine := fmt.Sprintf("  %.0f%% used of %s", pct, formatDiskSize(sample.DiskTotal))
+	detailLine := fmt.Sprintf("  %s used, %s free", formatDiskSize(sample.DiskUsed), formatDiskSize(sample.DiskFree))
+
+	barWidth := max(innerWidth-4, 0) // 2 padding + 2 margin
+	filled := int(pct / 100 * float64(barWidth))
+	filled = min(filled, barWidth)
+	empty := barWidth - filled
+	bar := "  " + strings.Repeat("█", filled) + strings.Repeat("░", empty)
+
+	lines := make([]string, contentRows)
+	for i := range lines {
+		var content string
+		switch i {
+		case 1:
+			content = padOrTruncate(pctLine, innerWidth)
+		case 2:
+			content = padOrTruncate(bar, innerWidth)
+		case 3:
+			content = padOrTruncate(detailLine, innerWidth)
+		default:
+			content = strings.Repeat(" ", innerWidth)
+		}
+		lines[i] = left + content + right
+	}
+
+	return topLine + strings.Join(lines, "\n") + "\n" + bottomLine
+}
+
+// Helpers
+
+func padOrTruncate(s string, width int) string {
+	w := lipgloss.Width(s)
+	if w >= width {
+		return s[:width]
+	}
+	return s + strings.Repeat(" ", width-w)
+}
+
+func formatDiskSize(bytes uint64) string {
+	const (
+		KB = 1000
+		MB = KB * 1000
+		GB = MB * 1000
+		TB = GB * 1000
+	)
+
+	switch {
+	case bytes >= TB:
+		return fmt.Sprintf("%.1fTB", float64(bytes)/float64(TB))
+	case bytes >= GB:
+		return fmt.Sprintf("%.0fGB", float64(bytes)/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.0fMB", float64(bytes)/float64(MB))
+	default:
+		return fmt.Sprintf("%.0fKB", float64(bytes)/float64(KB))
+	}
+}

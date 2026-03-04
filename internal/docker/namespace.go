@@ -174,6 +174,14 @@ func (n *Namespace) Refresh(ctx context.Context) error {
 	return n.restoreState(ctx)
 }
 
+func (n *Namespace) DockerRootDir(ctx context.Context) (string, error) {
+	info, err := n.client.Info(ctx)
+	if err != nil {
+		return "", err
+	}
+	return info.DockerRootDir, nil
+}
+
 func (n *Namespace) EventWatcher() *EventWatcher {
 	return NewEventWatcher(n.client, n.name)
 }

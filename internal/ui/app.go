@@ -12,6 +12,7 @@ import (
 	"github.com/basecamp/once/internal/docker"
 	"github.com/basecamp/once/internal/metrics"
 	"github.com/basecamp/once/internal/mouse"
+	"github.com/basecamp/once/internal/system"
 	"github.com/basecamp/once/internal/userstats"
 	"github.com/basecamp/once/internal/version"
 )
@@ -60,6 +61,7 @@ type App struct {
 	namespace       *docker.Namespace
 	scraper         *metrics.MetricsScraper
 	dockerScraper   *docker.Scraper
+	systemScraper   *system.Scraper
 	userStats       *userstats.Reader
 	currentScreen   Component
 	lastSize        tea.WindowSizeMsg
@@ -89,11 +91,22 @@ func NewApp(ns *docker.Namespace, installImageRef string) *App {
 		BufferSize: ChartHistoryLength,
 	})
 
+	diskPath, err := ns.DockerRootDir(ctx)
+	if err != nil {
+		slog.Warn("failed to get Docker root dir, using default", "err", err)
+		diskPath = "/var/lib/docker"
+	}
+
+	systemScraper := system.NewScraper(system.ScraperSettings{
+		BufferSize: ChartHistoryLength,
+		DiskPath:   diskPath,
+	})
+
 	userStats := userstats.NewReader(ns.Name())
 
 	var screen Component
 	if len(apps) > 0 && installImageRef == "" {
-		screen = NewDashboard(ns, apps, 0, scraper, dockerScraper, userStats)
+		screen = NewDashboard(ns, apps, 0, scraper, dockerScraper, systemScraper, userStats)
 	} else {
 		screen = NewInstall(ns, installImageRef)
 	}
@@ -102,6 +115,7 @@ func NewApp(ns *docker.Namespace, installImageRef string) *App {
 		namespace:       ns,
 		scraper:         scraper,
 		dockerScraper:   dockerScraper,
+		systemScraper:   systemScraper,
 		userStats:       userStats,
 		currentScreen:   screen,
 		eventChan:       eventChan,
@@ -192,7 +206,7 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
-		m.currentScreen = NewDashboard(m.namespace, apps, targetIndex, m.scraper, m.dockerScraper, m.userStats)
+		m.currentScreen = NewDashboard(m.namespace, apps, targetIndex, m.scraper, m.dockerScraper, m.systemScraper, m.userStats)
 		var sizeCmd tea.Cmd
 		m.currentScreen, sizeCmd = m.currentScreen.Update(m.lastSize)
 		return m, tea.Batch(sizeCmd, m.currentScreen.Init())
@@ -213,7 +227,7 @@ func (m *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
-		m.currentScreen = NewDashboard(m.namespace, apps, selectedIndex, m.scraper, m.dockerScraper, m.userStats)
+		m.currentScreen = NewDashboard(m.namespace, apps, selectedIndex, m.scraper, m.dockerScraper, m.systemScraper, m.userStats)
 		var sizeCmd tea.Cmd
 		m.currentScreen, sizeCmd = m.currentScreen.Update(m.lastSize)
 		return m, tea.Batch(sizeCmd, m.currentScreen.Init())
@@ -284,6 +298,7 @@ func (m *App) runScrape() tea.Cmd {
 		var wg sync.WaitGroup
 		wg.Go(func() { m.scraper.Scrape(m.watchCtx) })
 		wg.Go(func() { m.dockerScraper.Scrape(m.watchCtx) })
+		wg.Go(func() { m.systemScraper.Scrape(m.watchCtx) })
 		wg.Wait()
 		return scrapeDoneMsg{}
 	}

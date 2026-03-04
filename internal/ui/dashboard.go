@@ -2,6 +2,8 @@ package ui
 
 import (
 	"context"
+	"os"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/basecamp/once/internal/docker"
 	"github.com/basecamp/once/internal/metrics"
+	"github.com/basecamp/once/internal/system"
 	"github.com/basecamp/once/internal/userstats"
 )
 
@@ -33,20 +36,23 @@ var dashboardKeys = struct {
 }
 
 type Dashboard struct {
-	namespace     *docker.Namespace
-	scraper       *metrics.MetricsScraper
-	dockerScraper *docker.Scraper
-	userStats     *userstats.Reader
-	apps          []*docker.Application
-	panels        []DashboardPanel
-	selectedIndex int
-	width, height int
-	viewport      viewport.Model
-	toggling      bool
-	togglingApp   string
-	progress      ProgressBusy
-	help          Help
-	overlay       Component
+	namespace      *docker.Namespace
+	scraper        *metrics.MetricsScraper
+	dockerScraper  *docker.Scraper
+	systemScraper  *system.Scraper
+	userStats      *userstats.Reader
+	apps           []*docker.Application
+	panels         []DashboardPanel
+	header         DashboardHeader
+	hostname       string
+	selectedIndex  int
+	width, height  int
+	viewport       viewport.Model
+	toggling       bool
+	togglingApp    string
+	progress       ProgressBusy
+	help           Help
+	overlay        Component
 }
 
 type dashboardTickMsg struct{}
@@ -56,20 +62,25 @@ type startStopFinishedMsg struct {
 }
 
 func NewDashboard(ns *docker.Namespace, apps []*docker.Application, selectedIndex int,
-	scraper *metrics.MetricsScraper, dockerScraper *docker.Scraper, userStats *userstats.Reader) Dashboard {
+	scraper *metrics.MetricsScraper, dockerScraper *docker.Scraper, systemScraper *system.Scraper, userStats *userstats.Reader) Dashboard {
 
 	vp := viewport.New()
 	vp.MouseWheelEnabled = false
 	vp.KeyMap = viewport.KeyMap{} // disable default keys, we handle navigation ourselves
 
+	hostname, _ := os.Hostname()
+
 	d := Dashboard{
 		namespace:     ns,
 		scraper:       scraper,
 		dockerScraper: dockerScraper,
+		systemScraper: systemScraper,
 		userStats:     userStats,
 		apps:          apps,
 		selectedIndex: selectedIndex,
 		viewport:      vp,
+		header:        NewDashboardHeader(systemScraper),
+		hostname:      hostname,
 		progress:      NewProgressBusy(0, Colors.Border),
 		help:          NewHelp(),
 	}
@@ -243,24 +254,34 @@ func (m Dashboard) Update(msg tea.Msg) (Component, tea.Cmd) {
 }
 
 func (m Dashboard) View() string {
-	titleLine := Styles.TitleRule(m.width)
+	titleLine := Styles.TitleRule(m.width, m.hostname)
 
 	helpView := m.help.View()
 	helpLine := Styles.CenteredLine(m.width, helpView)
 
+	headerView := m.header.View(m.width)
+
 	if len(m.apps) == 0 {
 		emptyMsg := lipgloss.NewStyle().Foreground(Colors.Border).Render("There are no applications installed")
-		middleHeight := m.height - 1 - 1 // title + help
+		middleHeight := m.height - 1 - m.header.Height(m.width) - 1 // title + header + help
 		centeredContent := lipgloss.Place(m.width, middleHeight, lipgloss.Center, lipgloss.Center, emptyMsg)
+		if headerView != "" {
+			return titleLine + "\n" + headerView + "\n" + centeredContent + "\n" + helpLine
+		}
 		return titleLine + "\n" + centeredContent + "\n" + helpLine
 	}
 
-	var content string
-	if m.toggling {
-		content = titleLine + "\n" + m.viewport.View() + "\n" + m.progress.View() + "\n" + helpLine
-	} else {
-		content = titleLine + "\n" + m.viewport.View() + "\n" + helpLine
+	var parts []string
+	parts = append(parts, titleLine)
+	if headerView != "" {
+		parts = append(parts, headerView)
 	}
+	parts = append(parts, m.viewport.View())
+	if m.toggling {
+		parts = append(parts, m.progress.View())
+	}
+	parts = append(parts, helpLine)
+	content := strings.Join(parts, "\n")
 
 	if m.overlay != nil {
 		return OverlayCenter(content, m.overlay.View(), m.width, m.height)
@@ -298,13 +319,14 @@ func (m Dashboard) scheduleNextDashboardTick() tea.Cmd {
 }
 
 func (m *Dashboard) updateViewportSize() {
-	titleHeight := 1 // title line
+	titleHeight := 1
+	headerHeight := m.header.Height(m.width)
 	helpHeight := 1
 	progressHeight := 0
 	if m.toggling {
 		progressHeight = 1
 	}
-	vpHeight := max(m.height-titleHeight-helpHeight-progressHeight, 0)
+	vpHeight := max(m.height-titleHeight-headerHeight-helpHeight-progressHeight, 0)
 	m.viewport.SetHeight(vpHeight)
 	m.viewport.SetWidth(m.width)
 }
@@ -351,7 +373,8 @@ func (m *Dashboard) scrollToSelection() {
 
 func (m *Dashboard) panelIndexAtY(y int) (int, bool) {
 	titleHeight := 1
-	vpRow := y - titleHeight
+	headerHeight := m.header.Height(m.width)
+	vpRow := y - titleHeight - headerHeight
 	if vpRow < 0 || vpRow >= m.viewport.Height() {
 		return 0, false
 	}

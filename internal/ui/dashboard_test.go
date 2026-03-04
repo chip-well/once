@@ -11,6 +11,7 @@ import (
 
 	"github.com/basecamp/once/internal/docker"
 	"github.com/basecamp/once/internal/metrics"
+	"github.com/basecamp/once/internal/system"
 )
 
 func TestFormatDuration(t *testing.T) {
@@ -187,8 +188,9 @@ func testDashboard(numApps int) Dashboard {
 
 	scraper := metrics.NewMetricsScraper(metrics.ScraperSettings{})
 	dockerScraper := &docker.Scraper{}
+	systemScraper := system.NewScraper(system.ScraperSettings{BufferSize: 10})
 
-	return NewDashboard(nil, apps, 0, scraper, dockerScraper, nil)
+	return NewDashboard(nil, apps, 0, scraper, dockerScraper, systemScraper, nil)
 }
 
 func updateDashboard(d Dashboard, msg tea.Msg) (Dashboard, tea.Cmd) {
