@@ -274,7 +274,7 @@ func (m Dashboard) View() string {
 	var parts []string
 	parts = append(parts, titleLine)
 	if headerView != "" {
-		parts = append(parts, headerView)
+		parts = append(parts, headerView, "")
 	}
 	parts = append(parts, m.viewport.View())
 	if m.toggling {
@@ -321,6 +321,9 @@ func (m Dashboard) scheduleNextDashboardTick() tea.Cmd {
 func (m *Dashboard) updateViewportSize() {
 	titleHeight := 1
 	headerHeight := m.header.Height(m.width)
+	if headerHeight > 0 {
+		headerHeight++ // blank line separating header from app panels
+	}
 	helpHeight := 1
 	progressHeight := 0
 	if m.toggling {
@@ -370,6 +373,9 @@ func (m *Dashboard) scrollToSelection() {
 func (m *Dashboard) panelIndexAtY(y int) (int, bool) {
 	titleHeight := 1
 	headerHeight := m.header.Height(m.width)
+	if headerHeight > 0 {
+		headerHeight++
+	}
 	vpRow := y - titleHeight - headerHeight
 	if vpRow < 0 || vpRow >= m.viewport.Height() {
 		return 0, false
