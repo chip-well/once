@@ -15,7 +15,7 @@ func TestInstallAppList_SelectKnownApp(t *testing.T) {
 	require.NotNil(t, cmd)
 
 	// Menu emits MenuSelectMsg; feed it back to get the app list's own message
-	list, cmd = list.Update(cmd().(MenuSelectMsg))
+	_, cmd = list.Update(cmd().(MenuSelectMsg))
 	require.NotNil(t, cmd)
 
 	msg := cmd()
@@ -32,7 +32,7 @@ func TestInstallAppList_SelectOther(t *testing.T) {
 	list, cmd := list.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 
-	list, cmd = list.Update(cmd().(MenuSelectMsg))
+	_, cmd = list.Update(cmd().(MenuSelectMsg))
 	require.NotNil(t, cmd)
 
 	msg := cmd()
@@ -48,7 +48,7 @@ func TestInstallAppList_NavigateAndSelect(t *testing.T) {
 	list, cmd := list.Update(keyPressMsg("enter"))
 	require.NotNil(t, cmd)
 
-	list, cmd = list.Update(cmd().(MenuSelectMsg))
+	_, cmd = list.Update(cmd().(MenuSelectMsg))
 	require.NotNil(t, cmd)
 
 	msg := cmd()

@@ -43,7 +43,7 @@ func TestMenu_LetterKeysIgnoredWithoutShortcuts(t *testing.T) {
 	menu, cmd := menu.Update(keyPressMsg("a"))
 	assert.Nil(t, cmd)
 
-	menu, cmd = menu.Update(keyPressMsg("enter"))
+	_, cmd = menu.Update(keyPressMsg("enter"))
 	assert.NotNil(t, cmd)
 }
 
