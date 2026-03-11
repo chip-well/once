@@ -7,7 +7,6 @@ servers:
 
 proxy:
   host: get.once.com
-  ssl: true
 
 registry:
   server: localhost:5555
