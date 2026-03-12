@@ -81,7 +81,7 @@ func detectFrom(rw io.ReadWriter, timeout time.Duration) DetectedColors {
 	received := 0
 
 	collect := func(r colorResult) {
-		if r.index >= 0 && r.index < sampleCount && !detected.Detected[r.index] {
+		if r.index >= 0 && r.index < sampleCount {
 			detected.Colors[r.index] = r.color
 			detected.Detected[r.index] = true
 			received++
