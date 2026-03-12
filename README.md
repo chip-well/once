@@ -51,8 +51,9 @@ Whatever hostname you choose, make sure you have a DNS entry for it which points
 The details of how to do this will vary depending on which provider you use for your DNS, but generally you should have access to an admin interface where you can set up an `A` record with the hostname you've chosen, and the IP address of your machine.
 If you plan to install many applications on the same machine you could use a wildcard DNS entry for this.
 
-> [!TIP] One tip if you're using Cloudflare: by default, DNS entries on Cloudflare will have the "proxy" option enabled, which means that traffic will pass through Cloudflare before reaching your server.
-> ONCE works find in this setup, as long as you have SSL enabled end-to-end.
+> [!TIP]
+> One tip if you're using Cloudflare: by default, DNS entries on Cloudflare will have the "proxy" option enabled, which means that traffic will pass through Cloudflare before reaching your server.
+> ONCE works well in this setup provided you have SSL enabled end-to-end.
 > So just be sure your Cloudflare SSL mode is set to "Strict (full)" if you're using its proxy option.
 
 Once you've picked your application and entered the hostname, the rest is automatic.
