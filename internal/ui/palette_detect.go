@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,21 @@ const (
 type DetectedColors struct {
 	Colors   [sampleCount]colorful.Color
 	Detected [sampleCount]bool
+}
+
+// SupportsTrueColor returns true if the terminal responded with RGB color
+// values, implying it can also render them.
+// SupportsTrueColor reports whether the terminal is likely to support
+// 24-bit color output. COLORTERM is the authoritative signal; when it is
+// absent (common over SSH), we infer support from successful OSC palette
+// detection.
+func (d DetectedColors) SupportsTrueColor() bool {
+	colorterm := os.Getenv("COLORTERM")
+	if colorterm == "truecolor" || colorterm == "24bit" {
+		return true
+	}
+
+	return slices.Contains(d.Detected[:], true)
 }
 
 type colorResult struct {

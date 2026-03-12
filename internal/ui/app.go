@@ -8,6 +8,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 
 	"github.com/basecamp/once/internal/docker"
 	"github.com/basecamp/once/internal/metrics"
@@ -271,7 +272,13 @@ func Run(ns *docker.Namespace, installImageRef string) error {
 	ApplyPalette(NewPalette(detected))
 
 	app := NewApp(ns, installImageRef)
-	_, err := tea.NewProgram(app).Run()
+
+	var opts []tea.ProgramOption
+	if detected.SupportsTrueColor() {
+		opts = append(opts, tea.WithColorProfile(colorprofile.TrueColor))
+	}
+
+	_, err := tea.NewProgram(app, opts...).Run()
 	return err
 }
 

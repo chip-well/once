@@ -30,7 +30,6 @@ func TestDefaultPaletteSemanticAliases(t *testing.T) {
 	assert.Equal(t, p.FocusOrange, p.Warning)
 	assert.Equal(t, p.Red, p.Error)
 	assert.Equal(t, p.Green, p.Success)
-	assert.Equal(t, p.BackgroundTint, p.PanelBg)
 }
 
 func TestSynthesizeOrangeDarkTheme(t *testing.T) {

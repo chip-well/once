@@ -95,8 +95,8 @@ func (p DashboardPanel) View(selected bool, toggling bool, showDetails bool, wid
 
 	var body string
 	if selected {
-		body = bodyStyle.Background(Colors.PanelBg).Render(content)
-		body = WithBackground(Colors.PanelBg, body)
+		body = bodyStyle.Background(Colors.BackgroundTint).Render(content)
+		body = WithBackground(Colors.BackgroundTint, body)
 	} else {
 		body = bodyStyle.Render(content)
 	}
@@ -218,7 +218,7 @@ func (p DashboardPanel) renderTopTransition(selected bool, width int) string {
 		return strings.Repeat(" ", width)
 	}
 	indicatorChar := lipgloss.NewStyle().Foreground(Colors.Focused).Render("▗")
-	bodyChars := lipgloss.NewStyle().Foreground(Colors.PanelBg).Render(strings.Repeat("▄", width-1))
+	bodyChars := lipgloss.NewStyle().Foreground(Colors.BackgroundTint).Render(strings.Repeat("▄", width-1))
 	return indicatorChar + bodyChars
 }
 
@@ -227,7 +227,7 @@ func (p DashboardPanel) renderBottomTransition(selected bool, width int) string 
 		return strings.Repeat(" ", width)
 	}
 	indicatorChar := lipgloss.NewStyle().Foreground(Colors.Focused).Render("▝")
-	bodyChars := lipgloss.NewStyle().Foreground(Colors.PanelBg).Render(strings.Repeat("▀", width-1))
+	bodyChars := lipgloss.NewStyle().Foreground(Colors.BackgroundTint).Render(strings.Repeat("▀", width-1))
 	return indicatorChar + bodyChars
 }
 

@@ -30,8 +30,6 @@ type Palette struct {
 	Error   color.Color // = Red
 	Success color.Color // = Green
 	Warning color.Color // = FocusOrange
-	PanelBg color.Color // = BackgroundTint
-
 	// Private: detected RGB samples for calculations
 	samples  [sampleCount]colorful.Color
 	detected [sampleCount]bool
@@ -109,6 +107,11 @@ func NewPalette(detected DetectedColors) *Palette {
 
 	p.Primary = pickPrimary(p)
 	p.synthesize()
+
+	if !detected.SupportsTrueColor() {
+		p.BackgroundTint = nil
+	}
+
 	return p
 }
 
@@ -139,7 +142,6 @@ func (p *Palette) synthesize() {
 	p.Error = p.Red
 	p.Success = p.Green
 	p.Warning = p.FocusOrange
-	p.PanelBg = p.BackgroundTint
 }
 
 // synthesizeOrange produces a warm orange as the OKLCH complement of blue,
